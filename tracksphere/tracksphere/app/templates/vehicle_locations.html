@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vehicle Locations</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+        rel="stylesheet" />
+    <link rel="stylesheet" href="/static/css/styles.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        main {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 28px 32px 64px;
+        }
+
+        #map-section {
+            width: 100%;
+            max-width: 100%;
+            margin-bottom: 24px;
+            position: relative;
+        }
+
+        .map-header {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding: 14px 20px;
+            background: var(--panel-raised);
+            border-bottom: 1px solid var(--line);
+        }
+
+        .live-badge {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: #e42e2e;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #e4572e;
+            box-shadow: 0 0 8px #e4572e;
+            animation: pulse-red 1.5s infinite;
+        }
+
+        @keyframes pulse-red {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(228, 87, 46, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(228, 87, 46, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(228, 87, 46, 0); }
+        }
+
+
+        #map {
+            height: 560px;
+            width: 100%;
+            border-radius: 0 0 var(--radius) var(--radius);
+        }
+
+        .panel-list-full {
+            max-width: 100%;
+        }
+
+        .vehicle-item {
+            cursor: pointer;
+        }
+
+        .vehicle-item:hover {
+            background: var(--panel-raised);
+        }
+
+        .coords-info {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--ink-dim);
+            margin-left: auto;
+            padding-right: 12px;
+        }
+    </style>
+
+</head>
+
+<body>
+    <header>
+        <h1>TrackSphere</h1>
+        <nav>
+            <a href="/dashboard">Dashboard</a>
+            <a href="/vehicle-locations">Vehicle Locations</a>
+            <a href="/notifications">Notifications</a>
+            <a href="/logout">Logout</a>
+        </nav>
+    </header>
+
+    <main>
+        <section id="map-section" class="panel-list-full">
+            <div class="map-header">
+                <div class="live-badge">
+                    <span class="pulse-dot"></span> REALTIME GPS ACTIVE
+                </div>
+            </div>
+            <div id="map"></div>
+        </section>
+
+        <section id="available-vehicles" class="panel-list-full">
+            <h2>Available Vehicles</h2>
+            <ul>
+                {% for vehicle in vehicles %}
+                <li class="vehicle-item" data-vehicle-id="{{ vehicle.id }}">
+                    <span class="row-id">{{ vehicle.id }} <span class="sub">{{ vehicle.registration_number }}</span></span>
+                    <span class="coords-info" id="coords-{{ vehicle.id }}">Fetching GPS...</span>
+                    <span class="tag">{{ vehicle.vehicle_type }}</span>
+                </li>
+                {% else %}
+                <li class="empty-state">No vehicles available.</li>
+                {% endfor %}
+            </ul>
+        </section>
+
+        <section id="location-delegate" class="system-note">
+            <h2>Realtime Location Delegate</h2>
+            <p class="system-note-text">Vehicle GPS data is served through the location proxy and adapter pattern using the <code>/locations/all_vehicles</code> API endpoint.</p>
+        </section>
+    </main>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const map = L.map("map").setView([37.7749, -122.4194], 4);
+
+        L.tileLayer(
+            "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+            {
+                attribution: "&copy; OpenStreetMap contributors"
+            }
+        ).addTo(map);
+
+        const markersMap = {};
+        let initialFitDone = false;
+
+        async function fetchLiveLocations() {
+            try {
+                const response = await fetch("/locations/all_vehicles");
+                if (!response.ok) return;
+
+                const data = await response.json();
+                if (!Array.isArray(data)) return;
+
+                const latLngs = [];
+
+                data.forEach(loc => {
+                    const { vehicle_id, latitude, longitude, timestamp } = loc;
+                    const pos = [latitude, longitude];
+                    latLngs.push(pos);
+
+                    const formattedTime = new Date(timestamp).toLocaleTimeString();
+                    const popupContent = `
+                        <div style="font-family: sans-serif; color: #111;">
+                            <strong>Vehicle ID: ${vehicle_id}</strong><br/>
+                            Lat: ${latitude.toFixed(5)}, Lon: ${longitude.toFixed(5)}<br/>
+                            <small style="color: #666;">Updated: ${formattedTime}</small>
+                        </div>
+                    `;
+
+                    // Update map markers
+                    if (markersMap[vehicle_id]) {
+                        markersMap[vehicle_id].setLatLng(pos);
+                        markersMap[vehicle_id].setPopupContent(popupContent);
+                    } else {
+                        const marker = L.marker(pos)
+                            .addTo(map)
+                            .bindPopup(popupContent);
+                        markersMap[vehicle_id] = marker;
+                    }
+
+                    // Update live coords text in available vehicles list
+                    const coordsElem = document.getElementById(`coords-${vehicle_id}`);
+                    if (coordsElem) {
+                        coordsElem.textContent = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+                    }
+                });
+
+                if (!initialFitDone && latLngs.length > 0) {
+                    if (latLngs.length === 1) {
+                        map.setView(latLngs[0], 12);
+                    } else {
+                        const bounds = L.latLngBounds(latLngs);
+                        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
+                    }
+                    initialFitDone = true;
+                }
+            } catch (err) {
+                console.error("Error fetching vehicle locations:", err);
+            }
+        }
+
+        document.querySelectorAll(".vehicle-item").forEach(item => {
+            item.addEventListener("click", () => {
+                const vehicleId = item.getAttribute("data-vehicle-id");
+                if (markersMap[vehicleId]) {
+                    const marker = markersMap[vehicleId];
+                    map.setView(marker.getLatLng(), 14);
+                    marker.openPopup();
+                }
+            });
+        });
+
+        // Fast real-time polling every 2 seconds
+        fetchLiveLocations();
+        setInterval(fetchLiveLocations, 2000);
+    </script>
+</body>
+
+</html>
+

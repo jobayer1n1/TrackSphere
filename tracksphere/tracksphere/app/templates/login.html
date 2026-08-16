@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TrackSphere Login</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/static/css/styles.css" />
+</head>
+<body class="login-page">
+    <main class="login-main">
+        <section class="login-panel">
+            <h1 class="login-title">TrackSphere Login</h1>
+            <form class="login-form" action="/login" method="post">
+                <label for="email">Email</label>
+                <input id="email" type="email" name="email" required />
+                <label for="password">Password</label>
+                <input id="password" type="password" name="password" required />
+                <button type="submit">Login</button>
+            </form>
+        </section>
+    </main>
+</body>
+</html>

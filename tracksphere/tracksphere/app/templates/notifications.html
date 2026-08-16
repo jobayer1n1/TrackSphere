@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TrackSphere Notifications</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/static/css/styles.css" />
+</head>
+<body>
+    {% set priority_tone = {
+        'CRITICAL': 'alert', 'HIGH': 'alert',
+        'MEDIUM': 'beacon', 'WARNING': 'beacon',
+        'LOW': 'idle', 'INFO': 'route'
+    } %}
+
+    <header>
+        <h1>TrackSphere</h1>
+        <nav>
+            <a href="/dashboard">Dashboard</a>
+            <a href="/vehicle-locations">Vehicle Locations</a>
+            <a href="/notifications">Notifications</a>
+            <a href="/logout">Logout</a>
+        </nav>
+    </header>
+
+    <main>
+        <section class="panel-notifications-full">
+            <h2>All Notifications</h2>
+            <ul>
+                {% for notification in notifications %}
+                    <li>
+                        <span class="stamp" data-tone="{{ priority_tone.get(notification.priority.value, 'idle') }}">{{ notification.priority.value }}</span>
+                        <span class="message">{{ notification.message }}</span>
+                        <span class="timestamp">{{ notification.timestamp }}</span>
+                    </li>
+                {% else %}
+                    <li class="empty-state">No notifications yet.</li>
+                {% endfor %}
+            </ul>
+        </section>
+    </main>
+</body>
+</html>

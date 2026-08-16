@@ -1,0 +1,45 @@
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Environment variables & secrets
+.env
+.env.*
+!.env.example
+!.env.template
+!.env.sample
+
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+
+# SQLite & Databases
+*.db
+*.db-shm
+*.db-wal
+*.sqlite3
+*.sqlite3-*
+
+# IDEs / Editors / Tooling
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS / Temporary files
+.DS_Store
+Thumbs.db
+*.tmp
+*.temp
+*.bak
+
+# Testing & Coverage
+.coverage
+htmlcov/

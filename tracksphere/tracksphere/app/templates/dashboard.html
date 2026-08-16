@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TrackSphere Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/static/css/styles.css" />
+</head>
+<body>
+    {% set status_tone = {
+        'DELIVERED': 'route', 'IN_TRANSIT': 'route', 'ON_TIME': 'route',
+        'PENDING': 'beacon', 'ASSIGNED': 'beacon', 'BOARDING': 'beacon',
+        'DELAYED': 'alert', 'FAILED': 'alert', 'CANCELLED': 'alert', 'OFFLINE': 'alert',
+        'UNASSIGNED': 'idle', 'AVAILABLE': 'route', 'IDLE': 'idle', 'MAINTENANCE': 'alert'
+    } %}
+
+    <header>
+        <h1>TrackSphere</h1>
+        <p>{{ user.name }} <span aria-hidden="true">·</span> {{ user.role.value }}</p>
+        <nav>
+            <a href="/dashboard">Dashboard</a>
+            <a href="/vehicle-locations">Vehicle Locations</a>
+            <a href="/notifications">Notifications</a>
+            <a href="/logout">Logout</a>
+        </nav>
+    </header>
+
+    <main>
+        <section class="panel-deliveries">
+            <h2>Deliveries</h2>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Route</th>
+                            <th>Status</th>
+                            <th>Driver</th>
+                            <th>Vehicle</th>
+                            <th>Deadline</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for delivery in deliveries %}
+                        <tr>
+                            <td>{{ delivery.id }}</td>
+                            <td>
+                                <span class="route-cell">
+                                    <span class="dot origin"></span>
+                                    {{ delivery.pickup }}
+                                    <span class="line"></span>
+                                    <span class="dot dest"></span>
+                                    {{ delivery.destination }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="stamp" data-tone="{{ status_tone.get(delivery.status.value, 'idle') }}">{{ delivery.status.value }}</span>
+                            </td>
+                            <td class="mono">{{ delivery.driver_id or 'Unassigned' }}</td>
+                            <td class="mono">{{ delivery.vehicle_id or 'Unassigned' }}</td>
+                            <td class="deadline">{{ delivery.deadline }}</td>
+                        </tr>
+                        {% else %}
+                        <tr class="empty-row"><td colspan="6">No deliveries on the board.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <div class="panel-grid">
+            <section id="drivers-panel">
+                <h2>Drivers</h2>
+                {% if drivers %}
+                <ul>
+                    {% for driver in drivers %}
+                    <li>
+                        <span class="row-id">{{ driver.id }} <span class="sub">{{ driver.license_number }}</span></span>
+                        <span class="stamp" data-tone="{{ status_tone.get(driver.availability.value, 'idle') }}">{{ driver.availability.value }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="empty-state">No drivers on file.</p>
+                {% endif %}
+            </section>
+
+            <section id="vehicles-panel">
+                <h2>Vehicles</h2>
+                {% if vehicles %}
+                <ul>
+                    {% for vehicle in vehicles %}
+                    <li>
+                        <span class="row-id">{{ vehicle.id }} <span class="sub">{{ vehicle.registration_number }}</span></span>
+                        <span class="stamp" data-tone="{{ status_tone.get(vehicle.status.value, 'idle') }}">{{ vehicle.status.value }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="empty-state">No vehicles on file.</p>
+                {% endif %}
+            </section>
+
+            <section id="notifications-panel">
+                <h2>Notifications</h2>
+                {% if notifications %}
+                <ul>
+                    {% for notification in notifications %}
+                    <li>
+                        <span class="timestamp">{{ notification.timestamp }}</span>
+                        <span class="message">{{ notification.message }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="empty-state">Nothing to report.</p>
+                {% endif %}
+            </section>
+        </div>
+
+        {% if user.role.value == 'ADMINISTRATOR' %}
+        <section class="panel-admin">
+            <h2>Users</h2>
+            <ul>
+                {% for user_item in users %}
+                    <li>
+                        <span class="row-id">{{ user_item.id }} <span class="sub">{{ user_item.name }}</span></span>
+                        <span class="stamp" data-tone="beacon">{{ user_item.role }}</span>
+                    </li>
+                {% endfor %}
+            </ul>
+        </section>
+        {% endif %}
+    </main>
+</body>
+</html>
