@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block title %}TrackSphere - Live Fleet GPS Telemetry{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+    <div>
+        <h1 style="font-size: 1.85rem; margin-bottom: 0.25rem;">
+            {% if is_driver %}
+                🧑‍✈️ Driver GPS Telemetry & Live Map
+            {% else %}
+                🌐 Live Fleet GPS Telemetry
+            {% endif %}
+        </h1>
+        <p style="color: var(--text-secondary);">
+            {% if is_driver %}
+                Real-time position tracking for your driver unit via <code>SimulatedGPSAdapter</code> and <code>LocationServiceProxy</code>
+            {% else %}
+                Centralized fleet tracking across logistics hubs via <code>SimulatedGPSAdapter</code> and <code>GPSTrackingSubject</code>
+            {% endif %}
+        </p>
+    </div>
+    <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+        <button class="btn btn-secondary" onclick="pollAllVehicles()">
+            🔄 Refresh GPS Feed
+        </button>
+        {% if is_driver or vehicles|length == 1 %}
+        <button class="btn btn-primary" onclick="triggerDriverPing()">
+            📍 Ping Simulated GPS
+        </button>
+        {% endif %}
+    </div>
+</div>
+
+{% if is_filler %}
+<div style="background: rgba(139, 92, 246, 0.12); border: 1px solid rgba(139, 92, 246, 0.35); border-radius: var(--radius-md); padding: 0.85rem 1.25rem; margin-bottom: 1.25rem; display: flex; align-items: center; justify-content: space-between;">
+    <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <span style="font-size: 1.4rem;">📍</span>
+        <div>
+            <strong style="color: #c4b5fd;">Driver Filler Location Active</strong>
+            <p style="font-size: 0.825rem; color: var(--text-secondary); margin: 0;">
+                No active delivery vehicle is assigned to your profile yet. Simulating depot positioning at <strong>Manhattan Logistics Hub</strong>.
+            </p>
+        </div>
+    </div>
+    <span class="role-pill driver">Filler GPS Stream</span>
+</div>
+{% endif %}
+
+<div class="map-container-wrapper">
+    <!-- Sidebar Vehicle / Driver List -->
+    <div class="sidebar-panel">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;">
+            <h3 style="font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary);">
+                {% if is_driver %}Active Unit ({{ vehicles|length }}){% else %}Fleet Units ({{ vehicles|length }}){% endif %}
+            </h3>
+            <span style="font-size: 0.75rem; color: var(--accent-emerald); font-family: var(--font-mono);">● Live Stream</span>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+            {% for v in vehicles %}
+            {% set v_is_filler = v.is_filler if v.is_filler is defined else False %}
+            <div id="vehicle-item-{{ v.id }}" class="vehicle-selector-item" onclick="selectVehicleForTracking({{ v.id }}, '{{ v.registration_number }}', '{{ v.status.value }}', {{ 'true' if v_is_filler else 'false' }})">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                    <strong style="font-size: 0.95rem;">{{ '🧑‍✈️' if v_is_filler else '🚚' }} {{ v.registration_number }}</strong>
+                    <span class="status-pill {{ v.status.value.lower() }}">{{ v.status.value }}</span>
+                </div>
+                <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.4rem;">
+                    <span>{{ v.vehicle_type }}</span>
+                    {% if v.capacity %}
+                    &bull; <span>Cap: {{ v.capacity }}kg</span>
+                    {% endif %}
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-muted); background: rgba(0,0,0,0.25); padding: 4px 8px; border-radius: 4px;">
+                    <span>GPS:</span>
+                    <span id="coords-{{ v.id }}">Fetching...</span>
+                </div>
+                <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                    <button class="btn btn-secondary btn-sm" style="flex: 1; font-size: 0.75rem; padding: 3px 6px;" onclick="event.stopPropagation(); toggleBreadcrumbHistory({{ v.id }})">
+                        📜 Route History
+                    </button>
+                    <button class="btn btn-primary btn-sm" style="flex: 1; font-size: 0.75rem; padding: 3px 6px;" onclick="event.stopPropagation(); simulateGpsPing({{ v.id }}, '{{ v.registration_number }}', '{{ v.status.value }}', {{ 'true' if v_is_filler else 'false' }})">
+                        ⚡ Ping GPS
+                    </button>
+                </div>
+            </div>
+            {% else %}
+            <p style="color: var(--text-muted); text-align: center; padding: 2rem 0;">No active fleet units found.</p>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Interactive Leaflet Map -->
+    <div id="map"></div>
+</div>
+
+<script>
+const vehicleList = [
+    {% for v in vehicles %}
+    { 
+        id: {{ v.id }}, 
+        reg: "{{ v.registration_number }}", 
+        status: "{{ v.status.value }}",
+        isFiller: {{ 'true' if (v.is_filler is defined and v.is_filler) else 'false' }}
+    },
+    {% endfor %}
+];
+
+document.addEventListener('DOMContentLoaded', async () => {
+    // Default center (USA / North America Hub Overview or NYC Depot for single driver)
+    const isSingle = vehicleList.length === 1;
+    initMap(40.7128, -74.0060, isSingle ? 12 : 5);
+
+    // Initial plot of all vehicles
+    await pollAllVehicles();
+
+    // Auto fit map bounds across loaded units
+    setTimeout(() => {
+        fitMapToAllMarkers();
+    }, 400);
+});
+
+async function pollAllVehicles() {
+    for (const v of vehicleList) {
+        await updateVehicleOnMap(v.id, v.reg, v.status, v.isFiller);
+    }
+}
+
+async function triggerDriverPing() {
+    if (vehicleList.length > 0) {
+        const target = vehicleList[0];
+        await simulateGpsPing(target.id, target.reg, target.status, target.isFiller);
+    }
+}
+</script>
+{% endblock %}

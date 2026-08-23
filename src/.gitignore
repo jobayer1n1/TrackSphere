@@ -1,0 +1,86 @@
+# ==========================================
+# TrackSphere Project Specific Exclusions
+# ==========================================
+
+# Database & Runtime Storage (Do NOT commit local SQLite data)
+data/*.db
+data/*.db-journal
+data/*.sqlite
+data/*.sqlite3
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+!data/.gitkeep
+
+# Reference / Instructor Assignment Files
+reference/
+
+# Environment Configuration & Local Secrets
+.env
+.env.local
+.env.*.local
+*.env
+!*.env.example
+
+# AI / Assistant Scratch & Config Dirs
+.agents/
+scratch/
+
+# ==========================================
+# Python & Environment Exclusions
+# ==========================================
+
+# Bytecode & Caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.cache/
+
+# Builds & Packaging
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+
+# ==========================================
+# OS & Editor Artifacts
+# ==========================================
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Operating System Files
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# Logs & Temporary Files
+*.log
+logs/
+*.tmp
