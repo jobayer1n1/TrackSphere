@@ -4,6 +4,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'login.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.accessToken});
@@ -138,6 +141,20 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  Future<void> _logout() async {
+    _locationTimer?.cancel();
+    _locationTimer = null;
+
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.remove(sessionTokenKey);
+
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginPage()),
+      (route) => false,
+    );
+  }
+
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
@@ -148,7 +165,16 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Vehicle Tracking')),
+      appBar: AppBar(
+        title: const Text('Vehicle Tracking'),
+        actions: [
+          IconButton(
+            onPressed: _logout,
+            icon: const Icon(Icons.logout_rounded),
+            tooltip: 'Log out',
+          ),
+        ],
+      ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(20),

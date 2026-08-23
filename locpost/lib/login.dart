@@ -2,8 +2,11 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'home.dart';
+
+const sessionTokenKey = 'tracksphere_access_token';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -64,6 +67,9 @@ class _LoginPageState extends State<LoginPage> {
       if (accessToken == null || accessToken.isEmpty) {
         throw Exception('Login response did not contain an access token.');
       }
+
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.setString(sessionTokenKey, accessToken);
 
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
