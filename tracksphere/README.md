@@ -1,31 +1,94 @@
-# TrackSphere
+# TrackSphere: Fleet & Delivery Management System
 
-TrackSphere is a university software engineering project for fleet and delivery management.
-This repository establishes the initial architecture and foundation for a layered Python/FastAPI application.
+**TrackSphere** is a modular web platform designed for courier and fleet logistics operations, featuring centralized fleet management, automated job dispatching, real-time GPS telemetry tracking, and strict Role-Based Access Control (RBAC).
 
-## Project Structure
+---
 
-- `tracksphere/` - application package
-- `tests/` - unit and integration tests
-- `docs/` - architectural and design pattern documentation
+## 🛠️ Technology Stack
+- **Backend:** FastAPI (Python 3.10+) with Uvicorn
+- **Frontend:** Semantic HTML5, Vanilla CSS3 Custom Design System (Space Grotesk, Inter, dark slate theme), Vanilla JavaScript, and Leaflet.js interactive maps. *(No React/JS framework required)*
+- **Database:** SQLite with SQLAlchemy ORM (Repository Pattern)
 
-## Getting Started
+---
 
-1. Create and activate a Python virtual environment.
-2. Install dependencies:
+## 🏛️ Object-Oriented Design Patterns Applied
 
-```bash
-python -m pip install -r tracksphere/requirements.txt
+| # | Design Pattern | Component / File | Architectural Role |
+|---|---|---|---|
+| 1 | **Inheritance** | [`app/core/users/base.py`](file:///c:/Users/ttt/Desktop/CSE%20327%20Project%20Final%20Demo/app/core/users/base.py) &rarr; `Administrator`, `Dispatcher`, `DriverUser` | Domain user hierarchy establishing common identity and role-specific permission scopes. |
+| 2 | **Factory Method** | [`app/core/users/factory.py`](file:///c:/Users/ttt/Desktop/CSE%20327%20Project%20Final%20Demo/app/core/users/factory.py) (`UserFactory`) | Dynamically instantiates concrete `User` subclass objects based on `UserRole`. |
+| 3 | **Singleton** | [`app/core/auth/service.py`](file:///c:/Users/ttt/Desktop/CSE%20327%20Project%20Final%20Demo/app/core/auth/service.py) & [`app/core/notifications/service.py`](file:///c:/Users/ttt/Desktop/CSE%20327%20Project%20Final%20Demo/app/core/notifications/service.py) | Centralized, thread-safe singletons managing authentication sessions and system broadcasts. |
+| 4 | **Proxy (Protection Proxy)** | [`app/core/locations/location_proxy.py`](file:///c:/Users/ttt/Desktop/CSE%20327%20Project%20Final%20Demo/app/core/locations/location_proxy.py) (`LocationServiceProxy`) | Enforces strict RBAC on GPS telemetry: Admins & Dispatchers view all vehicles; Drivers can only access their assigned unit. |
+| 5 | **Adapter** | [`app/core/locations/simulated_gps_adapter.py`](file:///c:/Users/ttt/Desktop/CSE%20327%20Project%20Final%20Demo/app/core/locations/simulated_gps_adapter.py) & [`app/core/notifications/channels.py`](file:///c:/Users/ttt/Desktop/CSE%20327%20Project%20Final%20Demo/app/core/notifications/channels.py) | Standardizes raw hardware/simulated GPS feeds (`ExternalLocationData`) into canonical `TrackSphereLocation` and multi-channel messaging. |
+| 6 | **Strategy** | [`app/core/assignment/strategies.py`](file:///c:/Users/ttt/Desktop/CSE%20327%20Project%20Final%20Demo/app/core/assignment/strategies.py) (`AssignmentStrategy`) | Pluggable algorithm verifying driver & vehicle availability before dispatching assignments. |
+| 7 | **Observer** | [`app/core/tracking/service.py`](file:///c:/Users/ttt/Desktop/CSE%20327%20Project%20Final%20Demo/app/core/tracking/service.py) (`GPSTrackingSubject`, `Observer`) | Broadcasts live telemetry updates to registered notification and dashboard observers. |
+| 8 | **Decorator** | [`app/core/notifications/decorators.py`](file:///c:/Users/ttt/Desktop/CSE%20327%20Project%20Final%20Demo/app/core/notifications/decorators.py) (`NotificationDecorator`) | Dynamically enriches raw messages with in-app priority badges or email-style headers. |
+| 9 | **Facade** | [`app/core/facade/dashboard_facade.py`](file:///c:/Users/ttt/Desktop/CSE%20327%20Project%20Final%20Demo/app/core/facade/dashboard_facade.py) (`DashboardFacade`) | Synthesizes metrics and datasets across user, fleet, delivery, and notification repositories into role-tailored dashboard summaries. |
+
+---
+
+## 📁 Directory Structure
+
+```
+TrackSphere/
+├── app/
+│   ├── main.py                  # FastAPI app entrypoint, static & template mounting
+│   ├── config.py                # App configuration & settings
+│   ├── database.py              # SQLite engine, session maker, Base, init_db()
+│   ├── models/                  # SQLAlchemy ORM Models (User, Driver, Vehicle, Delivery, Assignment, Location, Notification)
+│   ├── schemas/                 # Pydantic validation schemas
+│   ├── repositories/            # Data Access Layer (Repository Pattern)
+│   ├── core/                    # Clean OOP & Design Patterns
+│   │   ├── users/               # [1] Inheritance & [2] Factory Method
+│   │   ├── auth/                # [3] Singleton Authentication
+│   │   ├── locations/           # [4] Proxy & [5] Adapter Patterns
+│   │   ├── assignment/          # [6] Strategy Pattern
+│   │   ├── tracking/            # [7] Observer Pattern
+│   │   ├── notifications/       # [3] Singleton, [8] Decorator, [5] Adapter Patterns
+│   │   └── facade/              # [9] Facade Pattern
+│   ├── api/                     # REST API & HTML View Controllers
+│   ├── templates/               # Semantic HTML5 Templates (Jinja2)
+│   └── static/                  # Vanilla CSS Design System & Leaflet JS Map Engine
+├── data/
+│   └── tracksphere.db           # SQLite database
+├── scripts/
+│   └── seed_data.py             # Database initialization and demo seeder
+├── requirements.txt             # Python dependencies
+├── .env.example                 # Environment configuration template
+└── README.md
 ```
 
-3. Start the app:
+---
 
+## 🚀 Quick Start Guide
+
+### 1. Set Up Environment & Install Dependencies
 ```bash
-uvicorn tracksphere.main:app --reload
+python -m venv .venv
+# On Windows PowerShell:
+.venv\Scripts\Activate.ps1
+
+pip install -r requirements.txt
 ```
 
-4. Verify health:
-
+### 2. Seed Demo Database
 ```bash
-curl http://127.0.0.1:8000/health
+python scripts/seed_data.py
 ```
+
+### 3. Start Application Server
+```bash
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+Open your browser at `http://127.0.0.1:8000`.
+
+---
+
+## 🔑 Demo Login Credentials
+
+| Role | Email | Password | Access Scope |
+|---|---|---|---|
+| **Administrator** | `admin@tracksphere.com` | `admin123` | Full access across all modules, fleet oversight, and global telemetry. |
+| **Dispatcher** | `dispatcher@tracksphere.com` | `dispatch123` | Create deliveries, assign driver/vehicle pairs, view live fleet GPS map. |
+| **Driver** | `driver.sarah@tracksphere.com` | `driver123` | View active assigned job, update transit status, inspect assigned vehicle GPS. |
+| **Driver** | `driver.john@tracksphere.com` | `driver123` | View assigned job queue and notifications. |
