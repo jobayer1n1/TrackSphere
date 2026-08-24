@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user_optional, get_db
 from app.config import settings
 from app.core.facade.dashboard_facade import DashboardFacade
-from app.models.enums import UserRole
+from app.models.enums import DeliveryStatus, UserRole
 from app.models.user import User
 from app.repositories.delivery_repository import DeliveryRepository
 from app.repositories.driver_repository import DriverRepository
@@ -83,34 +83,30 @@ def vehicle_locations(request: Request, db: Session = Depends(get_db)):
     if isinstance(user, RedirectResponse):
         return user
 
-    is_filler = False
-    if user.role == UserRole.DRIVER:
-        driver = DriverRepository(db).get_by_user_id(user.id)
-        if driver:
-            assigned_deliveries = DeliveryRepository(db).list_by_driver(driver.id)
-            assigned_vehicles = [d.vehicle for d in assigned_deliveries if d.vehicle]
-            seen_ids = set()
-            vehicles = []
-            for v in assigned_vehicles:
-                if v.id not in seen_ids:
-                    seen_ids.add(v.id)
-                    vehicles.append(v)
+    driver_repo = DriverRepository(db)
+    vehicle_repo = VehicleRepository(db)
+    delivery_repo = DeliveryRepository(db)
 
-            if not vehicles:
-                is_filler = True
-                filler_vehicle = {
-                    "id": 100 + driver.id,
-                    "registration_number": f"DRV-{driver.license_number.replace('CDL-', '')}",
-                    "vehicle_type": "Driver Unit (Simulated GPS / Filler)",
-                    "capacity": 1000,
-                    "status": type("EnumVal", (), {"value": "AVAILABLE"})(),
-                    "is_filler": True,
-                }
-                vehicles = [filler_vehicle]
-        else:
-            vehicles = []
+    is_driver = user.role == UserRole.DRIVER
+    drivers = []
+    vehicles = []
+    assigned_vehicle = None
+
+    if is_driver:
+        driver = driver_repo.get_by_user_id(user.id)
+        if driver:
+            drivers = [driver]
+            assigned_deliveries = delivery_repo.list_by_driver(driver.id)
+            active_delivery = next(
+                (d for d in assigned_deliveries if d.status in [DeliveryStatus.IN_PROGRESS, DeliveryStatus.ASSIGNED] and d.vehicle),
+                None,
+            )
+            if active_delivery and active_delivery.vehicle:
+                vehicles = [active_delivery.vehicle]
+                assigned_vehicle = active_delivery.vehicle
     else:
-        vehicles = VehicleRepository(db).list()
+        vehicles = vehicle_repo.list()
+        drivers = driver_repo.list()
 
     return templates.TemplateResponse(
         "vehicle_locations.html",
@@ -118,10 +114,12 @@ def vehicle_locations(request: Request, db: Session = Depends(get_db)):
             "request": request,
             "user": user,
             "vehicles": vehicles,
-            "is_driver": user.role == UserRole.DRIVER,
-            "is_filler": is_filler,
+            "drivers": drivers,
+            "is_driver": is_driver,
+            "assigned_vehicle": assigned_vehicle,
         },
     )
+
 
 
 

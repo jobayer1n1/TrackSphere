@@ -12,7 +12,8 @@ class AssignmentBase(BaseModel):
 
 
 class AssignmentCreate(AssignmentBase):
-    pass
+    strategy: str | None = None
+
 
 
 class AssignmentUpdate(BaseModel):

@@ -14,55 +14,100 @@
         </h1>
         <p style="color: var(--text-secondary);">
             {% if is_driver %}
-                Real-time position tracking for your driver unit via <code>SimulatedGPSAdapter</code> and <code>LocationServiceProxy</code>
+                Real-time position tracking for your assigned vehicle via <code>DriverLocationAdapter</code> and <code>LocationServiceProxy</code>
             {% else %}
-                Centralized fleet tracking across logistics hubs via <code>SimulatedGPSAdapter</code> and <code>GPSTrackingSubject</code>
+                Centralized fleet tracking across logistics hubs via <code>LocationServiceProxy</code> and <code>GPSTrackingSubject</code>
             {% endif %}
         </p>
     </div>
-    <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-        <button class="btn btn-secondary" onclick="pollAllVehicles()">
-            🔄 Refresh GPS Feed
+    <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+        <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; font-family: var(--font-mono); color: var(--accent-emerald); background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.25); padding: 4px 10px; border-radius: 9999px;">
+            <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent-emerald); animation: pulse 1.8s infinite;"></span>
+            Auto-Sync (4s)
+        </span>
+        <button class="btn btn-secondary" onclick="pollAllVehicles(true)">
+            🔄 Refresh Map
         </button>
-        {% if is_driver or vehicles|length == 1 %}
-        <button class="btn btn-primary" onclick="triggerDriverPing()">
-            📍 Ping Simulated GPS
-        </button>
-        {% endif %}
     </div>
 </div>
 
-{% if is_filler %}
-<div style="background: rgba(139, 92, 246, 0.12); border: 1px solid rgba(139, 92, 246, 0.35); border-radius: var(--radius-md); padding: 0.85rem 1.25rem; margin-bottom: 1.25rem; display: flex; align-items: center; justify-content: space-between;">
-    <div style="display: flex; align-items: center; gap: 0.75rem;">
-        <span style="font-size: 1.4rem;">📍</span>
-        <div>
-            <strong style="color: #c4b5fd;">Driver Filler Location Active</strong>
-            <p style="font-size: 0.825rem; color: var(--text-secondary); margin: 0;">
-                No active delivery vehicle is assigned to your profile yet. Simulating depot positioning at <strong>Manhattan Logistics Hub</strong>.
-            </p>
+<!-- Search & Filter Card -->
+<div class="card" style="margin-bottom: 1.25rem; padding: 1rem 1.25rem;">
+    <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem;">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="font-weight: 600; font-size: 0.9rem; color: var(--text-secondary);">Search Mode:</span>
+            <div style="display: flex; background: rgba(255,255,255,0.05); padding: 3px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                <button id="mode-btn-vehicle" class="btn btn-sm" style="background: var(--primary); color: white; border: none; padding: 4px 12px; font-size: 0.8rem;" onclick="setSearchMode('vehicle')">
+                    🚚 Vehicle
+                </button>
+                <button id="mode-btn-driver" class="btn btn-sm" style="background: transparent; color: var(--text-secondary); border: none; padding: 4px 12px; font-size: 0.8rem;" onclick="setSearchMode('driver')">
+                    🧑‍✈️ Driver
+                </button>
+            </div>
+        </div>
+
+        <div style="display: flex; flex: 1; max-width: 550px; gap: 0.5rem; align-items: center;">
+            <!-- Vehicle Search Selector -->
+            <div id="search-vehicle-container" style="flex: 1;">
+                <select id="vehicle-search-select" class="input-field" style="width: 100%; padding: 0.5rem 0.75rem; font-size: 0.85rem;" onchange="handleVehicleSelect(this.value)">
+                    <option value="">-- Select or Search Vehicle --</option>
+                    {% for v in vehicles %}
+                    <option value="{{ v.id }}" data-reg="{{ v.registration_number }}" data-status="{{ v.status.value }}" data-type="{{ v.vehicle_type }}">
+                        {{ v.registration_number }} - {{ v.vehicle_type }} ({{ v.status.value }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Driver Search Selector -->
+            <div id="search-driver-container" style="flex: 1; display: none;">
+                <select id="driver-search-select" class="input-field" style="width: 100%; padding: 0.5rem 0.75rem; font-size: 0.85rem;" onchange="handleDriverSelect(this.value)">
+                    <option value="">-- Select or Search Driver --</option>
+                    {% for d in drivers %}
+                    <option value="{{ d.id }}" data-name="{{ d.user.name if d.user else 'Driver' }}" data-license="{{ d.license_number }}">
+                        {{ d.user.name if d.user else 'Driver' }} (License: {{ d.license_number }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
         </div>
     </div>
-    <span class="role-pill driver">Filler GPS Stream</span>
+
+    <!-- Search Feedback / Status Notice Banner -->
+    <div id="search-feedback-banner" style="display: none; margin-top: 0.85rem; padding: 0.65rem 1rem; border-radius: var(--radius-sm); font-size: 0.85rem;">
+        <div id="search-feedback-content" style="display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span id="search-feedback-icon" style="font-size: 1.1rem;"></span>
+                <span id="search-feedback-text"></span>
+            </div>
+            <button onclick="clearSearchFeedback()" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 1rem;">&times;</button>
+        </div>
+    </div>
 </div>
-{% endif %}
 
 <div class="map-container-wrapper">
-    <!-- Sidebar Vehicle / Driver List -->
+    <!-- Sidebar Unit List Panel -->
     <div class="sidebar-panel">
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;">
-            <h3 style="font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary);">
-                {% if is_driver %}Active Unit ({{ vehicles|length }}){% else %}Fleet Units ({{ vehicles|length }}){% endif %}
-            </h3>
+            <div style="display: flex; gap: 0.5rem;">
+                <button id="tab-btn-vehicles" onclick="switchSidebarTab('vehicles')" style="background: transparent; border: none; color: var(--text-primary); font-weight: 700; font-size: 0.85rem; cursor: pointer; border-bottom: 2px solid var(--primary); padding-bottom: 2px;">
+                    Vehicles ({{ vehicles|length }})
+                </button>
+                {% if not is_driver %}
+                <button id="tab-btn-drivers" onclick="switchSidebarTab('drivers')" style="background: transparent; border: none; color: var(--text-muted); font-weight: 600; font-size: 0.85rem; cursor: pointer; padding-bottom: 2px;">
+                    Drivers ({{ drivers|length }})
+                </button>
+                {% endif %}
+            </div>
             <span style="font-size: 0.75rem; color: var(--accent-emerald); font-family: var(--font-mono);">● Live Stream</span>
         </div>
 
-        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+        <!-- Tab Content: Vehicles -->
+        <div id="sidebar-vehicles-list" style="display: flex; flex-direction: column; gap: 0.75rem;">
             {% for v in vehicles %}
-            {% set v_is_filler = v.is_filler if v.is_filler is defined else False %}
-            <div id="vehicle-item-{{ v.id }}" class="vehicle-selector-item" onclick="selectVehicleForTracking({{ v.id }}, '{{ v.registration_number }}', '{{ v.status.value }}', {{ 'true' if v_is_filler else 'false' }})">
+            <div id="vehicle-item-{{ v.id }}" class="vehicle-selector-item" onclick="selectVehicleForTracking({{ v.id }}, '{{ v.registration_number }}', '{{ v.status.value }}')">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
-                    <strong style="font-size: 0.95rem;">{{ '🧑‍✈️' if v_is_filler else '🚚' }} {{ v.registration_number }}</strong>
+                    <strong style="font-size: 0.95rem;">🚚 {{ v.registration_number }}</strong>
                     <span class="status-pill {{ v.status.value.lower() }}">{{ v.status.value }}</span>
                 </div>
                 <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.4rem;">
@@ -72,22 +117,54 @@
                     {% endif %}
                 </div>
                 <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-muted); background: rgba(0,0,0,0.25); padding: 4px 8px; border-radius: 4px;">
-                    <span>GPS:</span>
+                    <span>GPS Telemetry:</span>
                     <span id="coords-{{ v.id }}">Fetching...</span>
                 </div>
                 <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
                     <button class="btn btn-secondary btn-sm" style="flex: 1; font-size: 0.75rem; padding: 3px 6px;" onclick="event.stopPropagation(); toggleBreadcrumbHistory({{ v.id }})">
                         📜 Route History
                     </button>
-                    <button class="btn btn-primary btn-sm" style="flex: 1; font-size: 0.75rem; padding: 3px 6px;" onclick="event.stopPropagation(); simulateGpsPing({{ v.id }}, '{{ v.registration_number }}', '{{ v.status.value }}', {{ 'true' if v_is_filler else 'false' }})">
-                        ⚡ Ping GPS
+                    <button class="btn btn-primary btn-sm" style="flex: 1; font-size: 0.75rem; padding: 3px 6px;" onclick="event.stopPropagation(); selectVehicleForTracking({{ v.id }}, '{{ v.registration_number }}', '{{ v.status.value }}')">
+                        📍 Locate
                     </button>
                 </div>
             </div>
             {% else %}
-            <p style="color: var(--text-muted); text-align: center; padding: 2rem 0;">No active fleet units found.</p>
+            <div style="text-align: center; color: var(--text-muted); padding: 2rem 1rem;">
+                <p style="font-size: 1.2rem; margin-bottom: 0.5rem;">🚗</p>
+                <p style="margin: 0; font-weight: 500;">No active vehicles found.</p>
+                {% if is_driver %}
+                <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                    You are currently not assigned to any active vehicle job.
+                </p>
+                {% endif %}
+            </div>
             {% endfor %}
         </div>
+
+        <!-- Tab Content: Drivers -->
+        {% if not is_driver %}
+        <div id="sidebar-drivers-list" style="display: none; flex-direction: column; gap: 0.75rem;">
+            {% for d in drivers %}
+            <div id="driver-item-{{ d.id }}" class="vehicle-selector-item" onclick="locateDriver({{ d.id }}, '{{ d.user.name if d.user else 'Driver' }}')">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                    <strong style="font-size: 0.95rem;">🧑‍✈️ {{ d.user.name if d.user else 'Driver' }}</strong>
+                    <span class="status-pill {{ d.availability.value.lower() }}">{{ d.availability.value }}</span>
+                </div>
+                <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.4rem;">
+                    <span>License: <code>{{ d.license_number }}</code></span>
+                </div>
+                <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                    <button class="btn btn-primary btn-sm" style="width: 100%; font-size: 0.75rem; padding: 4px 6px;" onclick="event.stopPropagation(); locateDriver({{ d.id }}, '{{ d.user.name if d.user else 'Driver' }}')">
+                        🔍 Locate Driver Location
+                    </button>
+                </div>
+            </div>
+            {% else %}
+            <p style="color: var(--text-muted); text-align: center; padding: 2rem 0;">No drivers registered.</p>
+            {% endfor %}
+        </div>
+        {% endif %}
     </div>
 
     <!-- Interactive Leaflet Map -->
@@ -100,14 +177,15 @@ const vehicleList = [
     { 
         id: {{ v.id }}, 
         reg: "{{ v.registration_number }}", 
-        status: "{{ v.status.value }}",
-        isFiller: {{ 'true' if (v.is_filler is defined and v.is_filler) else 'false' }}
+        status: "{{ v.status.value }}"
     },
     {% endfor %}
 ];
 
+let currentSearchMode = 'vehicle';
+
 document.addEventListener('DOMContentLoaded', async () => {
-    // Default center (USA / North America Hub Overview or NYC Depot for single driver)
+    // Center map on initial load (depot or multi-hub overview)
     const isSingle = vehicleList.length === 1;
     initMap(40.7128, -74.0060, isSingle ? 12 : 5);
 
@@ -118,19 +196,169 @@ document.addEventListener('DOMContentLoaded', async () => {
     setTimeout(() => {
         fitMapToAllMarkers();
     }, 400);
+
+    // Start automatic live GPS polling every 4 seconds
+    startLivePolling(4000);
 });
 
-async function pollAllVehicles() {
+async function pollAllVehicles(showFeedback = false) {
     for (const v of vehicleList) {
-        await updateVehicleOnMap(v.id, v.reg, v.status, v.isFiller);
+        await updateVehicleOnMap(v.id, v.reg, v.status);
+    }
+    if (showFeedback) {
+        showToast('Live GPS telemetry synced!', 'success');
     }
 }
 
-async function triggerDriverPing() {
-    if (vehicleList.length > 0) {
-        const target = vehicleList[0];
-        await simulateGpsPing(target.id, target.reg, target.status, target.isFiller);
+function setSearchMode(mode) {
+    currentSearchMode = mode;
+    const btnVeh = document.getElementById('mode-btn-vehicle');
+    const btnDrv = document.getElementById('mode-btn-driver');
+    const containerVeh = document.getElementById('search-vehicle-container');
+    const containerDrv = document.getElementById('search-driver-container');
+
+    if (mode === 'vehicle') {
+        btnVeh.style.background = 'var(--primary)';
+        btnVeh.style.color = 'white';
+        btnDrv.style.background = 'transparent';
+        btnDrv.style.color = 'var(--text-secondary)';
+        containerVeh.style.display = 'block';
+        containerDrv.style.display = 'none';
+        switchSidebarTab('vehicles');
+    } else {
+        btnDrv.style.background = 'var(--primary)';
+        btnDrv.style.color = 'white';
+        btnVeh.style.background = 'transparent';
+        btnVeh.style.color = 'var(--text-secondary)';
+        containerVeh.style.display = 'none';
+        containerDrv.style.display = 'block';
+        switchSidebarTab('drivers');
     }
+}
+
+function switchSidebarTab(tab) {
+    const listVeh = document.getElementById('sidebar-vehicles-list');
+    const listDrv = document.getElementById('sidebar-drivers-list');
+    const tabVeh = document.getElementById('tab-btn-vehicles');
+    const tabDrv = document.getElementById('tab-btn-drivers');
+
+    if (tab === 'vehicles') {
+        if (listVeh) listVeh.style.display = 'flex';
+        if (listDrv) listDrv.style.display = 'none';
+        if (tabVeh) {
+            tabVeh.style.color = 'var(--text-primary)';
+            tabVeh.style.borderBottom = '2px solid var(--primary)';
+        }
+        if (tabDrv) {
+            tabDrv.style.color = 'var(--text-muted)';
+            tabDrv.style.borderBottom = 'none';
+        }
+    } else {
+        if (listVeh) listVeh.style.display = 'none';
+        if (listDrv) listDrv.style.display = 'flex';
+        if (tabDrv) {
+            tabDrv.style.color = 'var(--text-primary)';
+            tabDrv.style.borderBottom = '2px solid var(--primary)';
+        }
+        if (tabVeh) {
+            tabVeh.style.color = 'var(--text-muted)';
+            tabVeh.style.borderBottom = 'none';
+        }
+    }
+}
+
+async function handleVehicleSelect(vehicleId) {
+    if (!vehicleId) return;
+    const select = document.getElementById('vehicle-search-select');
+    const option = select.options[select.selectedIndex];
+    const reg = option.getAttribute('data-reg');
+    const status = option.getAttribute('data-status');
+
+    await selectVehicleForTracking(parseInt(vehicleId), reg, status);
+    displaySearchFeedback(
+        'success',
+        '🚚',
+        `Focusing on Vehicle <strong>${reg}</strong>. Live coordinates active on map.`
+    );
+}
+
+async function handleDriverSelect(driverId) {
+    if (!driverId) return;
+    const select = document.getElementById('driver-search-select');
+    const option = select.options[select.selectedIndex];
+    const name = option.getAttribute('data-name');
+    await locateDriver(parseInt(driverId), name);
+}
+
+async function locateDriver(driverId, driverName) {
+    try {
+        const result = await fetchDriverLocation(driverId);
+        if (result.error) {
+            displaySearchFeedback(
+                'warning',
+                '⚠️',
+                `<strong>Driver ${driverName}:</strong> Driver is not assigned to any vehicle.`
+            );
+            showToast(`Driver ${driverName} is not assigned to any vehicle.`, 'warning');
+            return;
+        }
+
+        const data = result.data;
+        const vehicleId = data.vehicle_id;
+        const vehicleReg = data.vehicle_registration || `Vehicle #${vehicleId}`;
+
+        // Plot and fly to assigned vehicle
+        const loc = await updateVehicleOnMap(vehicleId, vehicleReg, 'ASSIGNED', driverName);
+        if (loc && map) {
+            map.flyTo([loc.latitude, loc.longitude], 13, {
+                animate: true,
+                duration: 1.2
+            });
+            if (vehicleMarkers[vehicleId]) {
+                vehicleMarkers[vehicleId].openPopup();
+            }
+        }
+
+        displaySearchFeedback(
+            'success',
+            '🧑‍✈️',
+            `<strong>Driver ${driverName}</strong> is assigned to vehicle <strong>${vehicleReg}</strong>. Live location resolved via <code>DriverLocationAdapter</code>.`
+        );
+        showToast(`Located Driver ${driverName} via assigned vehicle ${vehicleReg}!`, 'success');
+    } catch (err) {
+        displaySearchFeedback('error', '❌', err.message);
+    }
+}
+
+function displaySearchFeedback(type, icon, message) {
+    const banner = document.getElementById('search-feedback-banner');
+    const iconEl = document.getElementById('search-feedback-icon');
+    const textEl = document.getElementById('search-feedback-text');
+
+    if (!banner || !iconEl || !textEl) return;
+
+    banner.style.display = 'block';
+    iconEl.innerHTML = icon;
+    textEl.innerHTML = message;
+
+    if (type === 'success') {
+        banner.style.background = 'rgba(16, 185, 129, 0.12)';
+        banner.style.border = '1px solid rgba(16, 185, 129, 0.35)';
+        banner.style.color = '#6ee7b7';
+    } else if (type === 'warning') {
+        banner.style.background = 'rgba(245, 158, 11, 0.12)';
+        banner.style.border = '1px solid rgba(245, 158, 11, 0.35)';
+        banner.style.color = '#fcd34d';
+    } else {
+        banner.style.background = 'rgba(239, 68, 68, 0.12)';
+        banner.style.border = '1px solid rgba(239, 68, 68, 0.35)';
+        banner.style.color = '#fca5a5';
+    }
+}
+
+function clearSearchFeedback() {
+    const banner = document.getElementById('search-feedback-banner');
+    if (banner) banner.style.display = 'none';
 }
 </script>
 {% endblock %}

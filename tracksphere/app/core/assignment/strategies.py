@@ -55,7 +55,30 @@ class HighPriorityStrategy(AssignmentStrategy):
         if not base_eligible:
             return False, reason
 
-        if vehicle.capacity < 500:
-            return False, f"High priority delivery requires vehicle capacity >= 500kg (Vehicle {vehicle.registration_number} has {vehicle.capacity}kg)."
+        if vehicle.capacity < 2000:
+            return False, f"High priority delivery requires vehicle capacity >= 2000kg (Vehicle {vehicle.registration_number} has {vehicle.capacity}kg)."
 
         return True, "Eligible for high-priority assignment."
+
+
+def get_assignment_strategy(
+    strategy_name: str | None = None, priority: int | None = None
+) -> AssignmentStrategy:
+    """
+    Strategy Resolver / Factory helper:
+    Dynamically select the appropriate AssignmentStrategy based on explicit strategy name
+    or delivery priority level (e.g. priority >= 3 -> HighPriorityStrategy).
+    """
+    if strategy_name:
+        name_clean = strategy_name.lower().replace("-", "_").replace(" ", "_")
+        if name_clean in ("high_priority", "highpriority", "high"):
+            return HighPriorityStrategy()
+        if name_clean in ("default", "default_availability", "standard"):
+            return DefaultAvailabilityStrategy()
+
+    # Automatically select based on job priority if priority >= 3 (High)
+    if priority is not None and priority >= 3:
+        return HighPriorityStrategy()
+
+    return DefaultAvailabilityStrategy()
+

@@ -1,10 +1,11 @@
 // TrackSphere Interactive Leaflet Map & GPS Telemetry Engine
-// Built for high-precision live fleet tracking and driver telemetry
+// Built for real-time fleet GPS telemetry, driver location adapter resolution, and automatic updates
 
 let map = null;
 let vehicleMarkers = {};
 let historyPolylines = {};
 let activeVehicleId = null;
+let pollingTimer = null;
 
 /**
  * Initialize or reset the Leaflet Map instance
@@ -56,10 +57,10 @@ function initMap(defaultLat = 40.7128, defaultLon = -74.0060, zoom = 11) {
 /**
  * Generate a modern, themed SVG / HTML icon for vehicles and driver units
  */
-function createVehicleIcon(registrationNumber, status = 'AVAILABLE', isFiller = false) {
+function createVehicleIcon(registrationNumber, status = 'AVAILABLE', driverName = null) {
     const isAssigned = status === 'ASSIGNED' || status === 'IN_PROGRESS';
-    const color = isFiller ? '#8b5cf6' : (isAssigned ? '#06b6d4' : '#10b981');
-    const iconSymbol = isFiller ? '🧑‍✈️' : (registrationNumber.startsWith('VAN') ? '🚐' : '🚚');
+    const color = isAssigned ? '#06b6d4' : '#10b981';
+    const iconSymbol = registrationNumber.startsWith('VAN') ? '🚐' : '🚚';
     const pulseClass = isAssigned ? 'pulse-active' : '';
 
     return L.divIcon({
@@ -81,7 +82,7 @@ function createVehicleIcon(registrationNumber, status = 'AVAILABLE', isFiller = 
 }
 
 /**
- * Query REST API for a vehicle or driver location
+ * Query REST API for a vehicle location
  */
 async function fetchVehicleLocation(vehicleId) {
     try {
@@ -92,7 +93,7 @@ async function fetchVehicleLocation(vehicleId) {
                 return null;
             }
             const err = await res.json();
-            throw new Error(err.detail || 'Failed to fetch location');
+            throw new Error(err.detail || 'Failed to fetch vehicle location');
         }
         return await res.json();
     } catch (err) {
@@ -102,51 +103,52 @@ async function fetchVehicleLocation(vehicleId) {
 }
 
 /**
- * Fetch current logged-in driver's location (assigned vehicle or filler)
+ * Query REST API for a driver's location (resolved via DriverLocationAdapter)
  */
-async function fetchMyDriverLocation() {
+async function fetchDriverLocation(driverId) {
     try {
-        const res = await fetch('/api/locations/driver/me');
+        const res = await fetch(`/api/locations/drivers/${driverId}`);
         if (!res.ok) {
             const err = await res.json();
-            throw new Error(err.detail || 'Failed to fetch driver location');
+            return { error: true, status: res.status, detail: err.detail || 'Driver is not assigned to any vehicle.' };
         }
-        return await res.json();
+        const data = await res.json();
+        return { error: false, data: data };
     } catch (err) {
-        console.error('[TrackSphere Map] Driver location fetch error:', err);
-        return null;
+        return { error: true, status: 500, detail: err.message };
     }
 }
 
 /**
- * Plot or update vehicle / driver marker on the interactive map
+ * Plot or update vehicle marker on the interactive map
  */
-async function updateVehicleOnMap(vehicleId, registrationNumber, status, isFiller = false) {
+async function updateVehicleOnMap(vehicleId, registrationNumber, status, driverName = null) {
     if (!map) return null;
 
-    let loc = null;
-    if (isFiller) {
-        loc = await fetchMyDriverLocation();
-    } else {
-        loc = await fetchVehicleLocation(vehicleId);
-    }
-
+    const loc = await fetchVehicleLocation(vehicleId);
     if (!loc) return null;
 
     const latLng = [loc.latitude, loc.longitude];
     const timestampStr = new Date(loc.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
+    const driverSection = driverName ? `
+        <div style="background: rgba(59, 130, 246, 0.08); padding: 4px 8px; border-radius: 4px; margin-bottom: 6px; border: 1px solid rgba(59, 130, 246, 0.2);">
+            <strong>🧑‍✈️ Driver:</strong> ${driverName}
+        </div>
+    ` : '';
+
     const popupHtml = `
-        <div style="color: #111827; font-family: 'Inter', sans-serif; min-width: 170px;">
+        <div style="color: #111827; font-family: 'Inter', sans-serif; min-width: 180px;">
             <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
-                <span style="font-size: 1.1rem;">${isFiller ? '🧑‍✈️' : '🚚'}</span>
+                <span style="font-size: 1.1rem;">🚚</span>
                 <strong style="font-size: 0.95rem; color: #111827;">${registrationNumber}</strong>
             </div>
+            ${driverSection}
             <div style="font-size: 11px; line-height: 1.5; color: #4b5563;">
-                <div><strong>Status:</strong> <span style="color: ${status === 'ASSIGNED' ? '#0284c7' : '#059669'}; font-weight: 600;">${status}</span></div>
+                <div><strong>Status:</strong> <span style="color: ${status === 'ASSIGNED' || status === 'IN_PROGRESS' ? '#0284c7' : '#059669'}; font-weight: 600;">${status}</span></div>
                 <div><strong>Latitude:</strong> ${loc.latitude.toFixed(5)}</div>
                 <div><strong>Longitude:</strong> ${loc.longitude.toFixed(5)}</div>
-                <div><strong>Last Ping:</strong> ${timestampStr}</div>
+                <div><strong>Live Telemetry:</strong> ${timestampStr}</div>
             </div>
             <div style="margin-top: 8px; border-top: 1px solid #e5e7eb; padding-top: 6px; display: flex; gap: 4px;">
                 <button onclick="toggleBreadcrumbHistory(${vehicleId})" style="flex: 1; font-size: 10px; padding: 4px 6px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer;">
@@ -161,14 +163,14 @@ async function updateVehicleOnMap(vehicleId, registrationNumber, status, isFille
         vehicleMarkers[vehicleId].setPopupContent(popupHtml);
     } else {
         const marker = L.marker(latLng, {
-            icon: createVehicleIcon(registrationNumber, status, isFiller)
+            icon: createVehicleIcon(registrationNumber, status, driverName)
         }).addTo(map);
 
         marker.bindPopup(popupHtml);
         vehicleMarkers[vehicleId] = marker;
     }
 
-    // Update telemetry coordinates panel if present
+    // Update telemetry coordinates panel in sidebar if present
     const coordsEl = document.getElementById(`coords-${vehicleId}`);
     if (coordsEl) {
         coordsEl.textContent = `${loc.latitude.toFixed(4)}, ${loc.longitude.toFixed(4)}`;
@@ -178,15 +180,15 @@ async function updateVehicleOnMap(vehicleId, registrationNumber, status, isFille
 }
 
 /**
- * Focus and zoom into a specific fleet unit or driver
+ * Focus and zoom into a specific fleet vehicle
  */
-async function selectVehicleForTracking(vehicleId, reg, status, isFiller = false) {
+async function selectVehicleForTracking(vehicleId, reg, status, driverName = null) {
     activeVehicleId = vehicleId;
     document.querySelectorAll('.vehicle-selector-item').forEach(el => el.classList.remove('selected'));
     const selectedEl = document.getElementById(`vehicle-item-${vehicleId}`);
     if (selectedEl) selectedEl.classList.add('selected');
 
-    const loc = await updateVehicleOnMap(vehicleId, reg, status, isFiller);
+    const loc = await updateVehicleOnMap(vehicleId, reg, status, driverName);
     if (loc && map) {
         map.flyTo([loc.latitude, loc.longitude], 13, {
             animate: true,
@@ -263,45 +265,13 @@ async function toggleBreadcrumbHistory(vehicleId) {
 }
 
 /**
- * Simulate live GPS telemetry movement and push to backend
+ * Automatically poll live GPS positions for all fleet vehicles
  */
-async function simulateGpsPing(vehicleId, reg, status, isFiller = false) {
-    let loc = null;
-    if (isFiller) {
-        loc = await fetchMyDriverLocation();
-    } else {
-        loc = await fetchVehicleLocation(vehicleId);
-    }
-
-    const currentLat = loc ? loc.latitude : 40.7580;
-    const currentLon = loc ? loc.longitude : -73.9855;
-
-    // Add natural vector movement jitter (approx 150-300m shift)
-    const jitterLat = (Math.random() - 0.45) * 0.004;
-    const jitterLon = (Math.random() - 0.45) * 0.004;
-    const newLat = parseFloat((currentLat + jitterLat).toFixed(6));
-    const newLon = parseFloat((currentLon + jitterLon).toFixed(6));
-
-    try {
-        const res = await fetch('/api/locations', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                vehicle_id: vehicleId,
-                latitude: newLat,
-                longitude: newLon,
-            })
-        });
-
-        if (!res.ok) {
-            const err = await res.json();
-            throw new Error(err.detail || 'Failed to submit GPS ping');
+function startLivePolling(intervalMs = 4000) {
+    if (pollingTimer) clearInterval(pollingTimer);
+    pollingTimer = setInterval(async () => {
+        if (typeof pollAllVehicles === 'function') {
+            await pollAllVehicles();
         }
-
-        const saved = await res.json();
-        await updateVehicleOnMap(vehicleId, reg, status, isFiller);
-        showToast(`📍 Simulated GPS ping dispatched: [${newLat}, ${newLon}]`, 'success');
-    } catch (err) {
-        showToast(err.message, 'error');
-    }
+    }, intervalMs);
 }

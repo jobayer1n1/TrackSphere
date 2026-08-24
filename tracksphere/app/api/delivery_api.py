@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db, require_role
 from app.core.assignment.service import AssignmentService
+from app.core.assignment.strategies import get_assignment_strategy
 from app.core.notifications.service import NotificationService
 from app.models.delivery import Delivery
 from app.models.enums import AvailabilityStatus, DeliveryStatus, NotificationPriority, NotificationType, UserRole, VehicleStatus
@@ -71,9 +72,10 @@ def create_delivery(
     )
     saved = repo.create(new_delivery)
 
-    # If driver and vehicle provided, assign immediately
+    # If driver and vehicle provided, assign immediately with dynamic strategy
     if delivery_in.driver_id and delivery_in.vehicle_id:
-        assign_svc = AssignmentService()
+        strategy = get_assignment_strategy(priority=delivery_in.priority)
+        assign_svc = AssignmentService(strategy=strategy)
         assignment, msg = assign_svc.assign_delivery(
             db, saved.id, delivery_in.driver_id, delivery_in.vehicle_id
         )
@@ -93,7 +95,16 @@ def assign_delivery(
     if not assign_in.vehicle_id:
         raise HTTPException(status_code=400, detail="Vehicle ID is required for assignment.")
 
-    assign_svc = AssignmentService()
+    delivery = DeliveryRepository(db).get(delivery_id)
+    if not delivery:
+        raise HTTPException(status_code=404, detail="Delivery not found.")
+
+    # Strategy Pattern: Resolve strategy dynamically based on explicit request or delivery priority
+    strategy = get_assignment_strategy(
+        strategy_name=assign_in.strategy,
+        priority=delivery.priority,
+    )
+    assign_svc = AssignmentService(strategy=strategy)
     assignment, msg = assign_svc.assign_delivery(
         db, delivery_id, assign_in.driver_id, assign_in.vehicle_id
     )

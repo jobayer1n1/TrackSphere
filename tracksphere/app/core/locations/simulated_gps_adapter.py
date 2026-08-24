@@ -23,15 +23,12 @@ class SimulatedGPSAdapter(LocationProvider):
     Adapts simulated coordinate feeds (and hardware feeds) to the standard TrackSphereLocation domain structure.
     """
 
-    # Shared coordinate registry for vehicle and driver filler feeds
+    # Shared coordinate registry for vehicle telemetry feeds
     _shared_seed: dict[int, tuple[float, float]] = {
         1: (40.7128, -74.0060),  # Vehicle 1: New York hub
         2: (34.0522, -118.2437), # Vehicle 2: Los Angeles hub (assigned to Sarah Connor)
         3: (41.8781, -87.6298),  # Vehicle 3: Chicago hub
         4: (29.7604, -95.3698),  # Vehicle 4: Houston hub
-        101: (40.7580, -73.9855), # Driver 1 (John Miller): Manhattan Dispatch Hub (Filler)
-        102: (34.0522, -118.2437), # Driver 2 (Sarah Connor): LA Delivery Route
-        103: (41.8781, -87.6298),  # Driver 3 (Alex Murphy): Chicago Depot (Filler)
     }
 
     def __init__(self):
