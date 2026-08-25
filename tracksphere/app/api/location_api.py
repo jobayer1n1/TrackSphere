@@ -1,5 +1,7 @@
+import asyncio
+from typing import Any
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
@@ -8,7 +10,7 @@ from app.core.locations.location_models import TrackSphereLocation
 from app.core.locations.location_proxy import LocationServiceProxy
 from app.core.locations.location_service import TrackSphereLocationService
 from app.core.locations.simulated_gps_adapter import SimulatedGPSAdapter
-from app.core.tracking.service import tracking_subject
+from app.core.tracking.service import tracking_subject, Observer
 from app.models.user import User
 from app.repositories.driver_repository import DriverRepository
 from app.repositories.location_repository import LocationRepository
@@ -312,4 +314,59 @@ def get_vehicle_location_history(
         for h in history
     ]
 
+
+class WebSocketConnectionManager(Observer):
+    def __init__(self):
+        self.active_queues: list[asyncio.Queue] = []
+        self._loop = None
+
+    def _get_loop(self):
+        if self._loop is None:
+            try:
+                self._loop = asyncio.get_running_loop()
+            except RuntimeError:
+                pass
+        return self._loop
+
+    async def connect(self, websocket: WebSocket) -> asyncio.Queue:
+        await websocket.accept()
+        queue = asyncio.Queue()
+        self.active_queues.append(queue)
+        if self._loop is None:
+            self._loop = asyncio.get_running_loop()
+        return queue
+
+    def disconnect(self, queue: asyncio.Queue):
+        if queue in self.active_queues:
+            self.active_queues.remove(queue)
+
+    def update(self, event_type: str, data: dict[str, Any]) -> None:
+        """
+        Synchronous update called by GPSTrackingSubject.
+        Pushes to async queues safely across thread boundaries.
+        """
+        if event_type == "LOCATION_UPDATE":
+            loop = self._get_loop()
+            if loop and loop.is_running():
+                for queue in self.active_queues:
+                    loop.call_soon_threadsafe(queue.put_nowait, data)
+
+ws_manager = WebSocketConnectionManager()
+tracking_subject.attach(ws_manager)
+
+@router.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """
+    WebSocket endpoint for real-time telemetry updates.
+    Replaces client-side HTTP polling.
+    """
+    queue = await ws_manager.connect(websocket)
+    try:
+        while True:
+            data = await queue.get()
+            await websocket.send_json(data)
+    except WebSocketDisconnect:
+        ws_manager.disconnect(queue)
+    except asyncio.CancelledError:
+        ws_manager.disconnect(queue)
 

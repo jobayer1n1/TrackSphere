@@ -122,10 +122,10 @@ async function fetchDriverLocation(driverId) {
 /**
  * Plot or update vehicle marker on the interactive map
  */
-async function updateVehicleOnMap(vehicleId, registrationNumber, status, driverName = null) {
+async function updateVehicleOnMap(vehicleId, registrationNumber, status, driverName = null, preFetchedLoc = null) {
     if (!map) return null;
 
-    const loc = await fetchVehicleLocation(vehicleId);
+    const loc = preFetchedLoc || await fetchVehicleLocation(vehicleId);
     if (!loc) return null;
 
     const latLng = [loc.latitude, loc.longitude];
@@ -265,13 +265,52 @@ async function toggleBreadcrumbHistory(vehicleId) {
 }
 
 /**
- * Automatically poll live GPS positions for all fleet vehicles
+ * Initialize real-time WebSocket connection for live GPS telemetry
  */
-function startLivePolling(intervalMs = 4000) {
+function initWebSocket() {
     if (pollingTimer) clearInterval(pollingTimer);
-    pollingTimer = setInterval(async () => {
-        if (typeof pollAllVehicles === 'function') {
-            await pollAllVehicles();
+    
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/api/locations/ws`;
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+        console.log('[TrackSphere Map] WebSocket telemetry connected.');
+        if (typeof showToast === 'function') {
+            showToast('Real-time telemetry connected', 'success');
         }
-    }, intervalMs);
+    };
+
+    ws.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            if (data.vehicle_id) {
+                // Find vehicle reg and status from DOM
+                const row = document.getElementById(`vehicle-item-${data.vehicle_id}`);
+                if (row) {
+                    const regEl = row.querySelector('.font-medium');
+                    const statusEl = row.querySelector('.px-2.inline-flex');
+                    const driverNameEl = row.querySelector('.text-gray-500.text-xs');
+                    
+                    const reg = regEl ? regEl.textContent.trim() : `Vehicle #${data.vehicle_id}`;
+                    const status = statusEl ? statusEl.textContent.trim() : 'AVAILABLE';
+                    const driverName = driverNameEl ? driverNameEl.textContent.replace('🧑‍✈️ Driver:', '').trim() : null;
+                    
+                    updateVehicleOnMap(data.vehicle_id, reg, status, driverName, data);
+                }
+            }
+        } catch (err) {
+            console.error('[TrackSphere Map] Error processing WS message:', err);
+        }
+    };
+
+    ws.onclose = () => {
+        console.warn('[TrackSphere Map] WebSocket closed. Reconnecting in 5s...');
+        setTimeout(initWebSocket, 5000);
+    };
+
+    ws.onerror = (err) => {
+        console.error('[TrackSphere Map] WebSocket error:', err);
+        ws.close();
+    };
 }

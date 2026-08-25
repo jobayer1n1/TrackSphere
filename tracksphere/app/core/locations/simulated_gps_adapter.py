@@ -55,12 +55,7 @@ class SimulatedGPSAdapter(LocationProvider):
             base = (40.7580, -73.9855)
             self._seed[vehicle_id] = base
 
-        # Add slight natural movement jitter
-        jitter_lat = (random.random() - 0.5) * 0.003
-        jitter_lon = (random.random() - 0.5) * 0.003
-        new_coords = (round(base[0] + jitter_lat, 6), round(base[1] + jitter_lon, 6))
-        self._seed[vehicle_id] = new_coords
-        return new_coords
+        return base
 
     def _translate(self, data: ExternalLocationData) -> TrackSphereLocation:
         return TrackSphereLocation(
