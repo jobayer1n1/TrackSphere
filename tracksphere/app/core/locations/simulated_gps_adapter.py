@@ -1,6 +1,8 @@
 from __future__ import annotations
 from datetime import datetime, timezone
 import random
+from typing import Optional
+from sqlalchemy.orm import Session
 
 from app.core.locations.location_models import TrackSphereLocation
 from app.core.locations.location_provider import ExternalLocationData, LocationProvider
@@ -20,19 +22,28 @@ class SimulatedGPSData:
 class SimulatedGPSAdapter(LocationProvider):
     """
     Adapter Pattern:
-    Adapts simulated coordinate feeds (and hardware feeds) to the standard TrackSphereLocation domain structure.
+    Simulates a hardware GPS provider.
+    Translates fake hardware payloads into internal TrackSphereLocation domain models.
     """
 
-    # Shared coordinate registry for vehicle telemetry feeds
-    _shared_seed: dict[int, tuple[float, float]] = {
-        1: (40.7128, -74.0060),  # Vehicle 1: New York hub
-        2: (34.0522, -118.2437), # Vehicle 2: Los Angeles hub (assigned to Sarah Connor)
-        3: (41.8781, -87.6298),  # Vehicle 3: Chicago hub
-        4: (29.7604, -95.3698),  # Vehicle 4: Houston hub
-    }
-
-    def __init__(self):
-        self._seed = SimulatedGPSAdapter._shared_seed
+    def __init__(self, db: Optional[Session] = None):
+        self._seed = {}
+        self.db = db
+        
+        if self.db:
+            from app.repositories.vehicle_repository import VehicleRepository
+            from app.repositories.location_repository import LocationRepository
+            
+            vehicles = VehicleRepository(self.db).list()
+            loc_repo = LocationRepository(self.db)
+            
+            for v in vehicles:
+                last_loc = loc_repo.get_latest_by_vehicle(v.id)
+                if last_loc:
+                    self._seed[v.id] = (last_loc.latitude, last_loc.longitude)
+                else:
+                    # Fallback to Dhaka hub if vehicle has no history
+                    self._seed[v.id] = (23.8103, 90.4125)
 
     def fetch_location(self, vehicle_id: int) -> TrackSphereLocation:
         lat, lon = self._get_coordinates(vehicle_id)
@@ -51,10 +62,9 @@ class SimulatedGPSAdapter(LocationProvider):
     def _get_coordinates(self, vehicle_id: int) -> tuple[float, float]:
         base = self._seed.get(vehicle_id)
         if not base:
-            # Fallback filler location for any unspecified driver/vehicle (NYC Central Logistics Hub)
-            base = (40.7580, -73.9855)
+            # Fallback filler location (Dhaka)
+            base = (23.8103, 90.4125)
             self._seed[vehicle_id] = base
-
         return base
 
     def _translate(self, data: ExternalLocationData) -> TrackSphereLocation:

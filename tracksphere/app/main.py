@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI
@@ -23,7 +24,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 async def lifespan(app: FastAPI):
     # Initialize database tables on startup
     init_db()
-    yield
+    try:
+        yield
+    except asyncio.CancelledError:
+        pass
 
 
 app = FastAPI(

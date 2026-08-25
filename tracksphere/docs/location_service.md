@@ -11,6 +11,9 @@ TrackSphere uses standard GoF design patterns to keep the location service decou
 
 1. **Adapter Pattern** (`SimulatedGPSAdapter`, `DriverLocationAdapter`): 
    - *Problem Solved*: Incompatible data structures and varying hardware interfaces. 
+   - *Target Interface*: `LocationProvider` / `DriverLocationProvider` (The common interfaces our system relies on).
+   - *Adaptee*: External raw GPS device payloads, or underlying vehicle assignment logic (The incompatible interfaces/systems).
+   - *Adapter*: `SimulatedGPSAdapter`, `DriverLocationAdapter` (The classes translating the Adaptee to match the Target Interface).
    - *Implementation*: Adapts external raw GPS feeds (or driver assignments) into our internal `TrackSphereLocation` domain model. This allows us to effortlessly swap out simulated GPS feeds for physical IoT hardware without touching any core business logic.
 2. **Proxy Pattern (Protection Proxy)** (`LocationServiceProxy`):
    - *Problem Solved*: Security and cross-cutting access control.

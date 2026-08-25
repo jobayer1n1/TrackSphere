@@ -36,6 +36,10 @@ class DriverLocationAdapter(DriverLocationProvider):
     Adapter Pattern:
     Adapts Driver location requests to the underlying LocationService (which operates on vehicle_id).
     
+    - Target Interface: DriverLocationProvider (The interface expected by the client)
+    - Adaptee: LocationService and underlying vehicle telemetry (The incompatible system being wrapped)
+    - Adapter: DriverLocationAdapter (This class translating the request)
+    
     Since physical GPS telemetry belongs to vehicles (the adaptee), this adapter:
     1. Looks up the driver's active vehicle assignment.
     2. If assigned, delegates to the LocationService to fetch that vehicle's live coordinates.

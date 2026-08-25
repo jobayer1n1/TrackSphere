@@ -35,7 +35,7 @@ def get_my_driver_location(
     Uses DriverLocationAdapter (Adapter Pattern) to resolve assigned vehicle location.
     If the driver is not assigned to any vehicle, returns 404.
     """
-    provider = SimulatedGPSAdapter()
+    provider = SimulatedGPSAdapter(db=db)
     service = TrackSphereLocationService(provider)
     proxy = LocationServiceProxy(service, current_user, db=db)
 
@@ -75,7 +75,7 @@ def get_driver_location(
     Uses DriverLocationAdapter (Adapter Pattern) to resolve assigned vehicle location.
     If the driver is not assigned to any vehicle, returns 404.
     """
-    provider = SimulatedGPSAdapter()
+    provider = SimulatedGPSAdapter(db=db)
     service = TrackSphereLocationService(provider)
     proxy = LocationServiceProxy(service, current_user, db=db)
 
@@ -117,7 +117,7 @@ def search_location(
       if unassigned, returns result with is_assigned=False and descriptive message.
     - If Vehicle: Returns vehicle live coordinates.
     """
-    provider = SimulatedGPSAdapter()
+    provider = SimulatedGPSAdapter(db=db)
     service = TrackSphereLocationService(provider)
     proxy = LocationServiceProxy(service, current_user, db=db)
 
@@ -221,7 +221,7 @@ def submit_location_update(
     Accept new live GPS coordinates for a vehicle, update adapter cache,
     record in LocationRepository, and broadcast to GPSTrackingSubject observers.
     """
-    provider = SimulatedGPSAdapter()
+    provider = SimulatedGPSAdapter(db=db)
     service = TrackSphereLocationService(provider)
     proxy = LocationServiceProxy(service, current_user, db=db)
 
@@ -262,7 +262,7 @@ def get_vehicle_location(
     Fetch vehicle location using SimulatedGPSAdapter adapted via LocationProvider,
     processed by TrackSphereLocationService and protected by LocationServiceProxy (Protection Proxy Pattern).
     """
-    provider = SimulatedGPSAdapter()
+    provider = SimulatedGPSAdapter(db=db)
     service = TrackSphereLocationService(provider)
     proxy = LocationServiceProxy(service, current_user, db=db)
 
@@ -292,7 +292,7 @@ def get_vehicle_location_history(
     """
     Retrieve historical GPS breadcrumbs for a vehicle.
     """
-    provider = SimulatedGPSAdapter()
+    provider = SimulatedGPSAdapter(db=db)
     service = TrackSphereLocationService(provider)
     proxy = LocationServiceProxy(service, current_user, db=db)
 
