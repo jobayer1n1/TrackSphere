@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+
+{% block title %}TrackSphere - Operations Dashboard{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: flex-end;">
+    <div>
+        <h1 style="font-size: 1.85rem; margin-bottom: 0.25rem;">Operations Dashboard</h1>
+        <p style="color: var(--text-secondary);">Role Overview: <strong>{{ user.role.value }}</strong></p>
+    </div>
+    <div>
+        {% if user.role.value in ['ADMINISTRATOR', 'DISPATCHER'] %}
+        <a href="/deliveries" class="btn btn-primary" id="btn-quick-new-delivery">+ Create Delivery</a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- KPI Metrics Grid (Facade Pattern Synthesized) -->
+{% if summary.kpi %}
+<div class="kpi-grid">
+    {% if user.role.value == 'ADMINISTRATOR' %}
+    <div class="kpi-card">
+        <span class="kpi-title">Fleet Vehicles</span>
+        <span class="kpi-value">{{ summary.kpi.total_vehicles }}</span>
+        <span style="font-size: 0.8rem; color: var(--accent-emerald);">{{ summary.kpi.available_vehicles }} Available</span>
+    </div>
+    <div class="kpi-card">
+        <span class="kpi-title">Driver Roster</span>
+        <span class="kpi-value">{{ summary.kpi.total_drivers }}</span>
+        <span style="font-size: 0.8rem; color: var(--accent-cyan);">{{ summary.kpi.available_drivers }} On Duty</span>
+    </div>
+    <div class="kpi-card">
+        <span class="kpi-title">Active Deliveries</span>
+        <span class="kpi-value" style="color: var(--accent-primary);">{{ summary.kpi.active_deliveries }}</span>
+        <span style="font-size: 0.8rem; color: var(--text-muted);">{{ summary.kpi.total_deliveries }} Total Jobs</span>
+    </div>
+    <div class="kpi-card">
+        <span class="kpi-title">Completed Orders</span>
+        <span class="kpi-value" style="color: var(--accent-emerald);">{{ summary.kpi.completed_deliveries }}</span>
+        <span style="font-size: 0.8rem; color: var(--accent-emerald);">100% On-time</span>
+    </div>
+    {% elif user.role.value == 'DISPATCHER' %}
+    <div class="kpi-card">
+        <span class="kpi-title">Pending Dispatch</span>
+        <span class="kpi-value" style="color: var(--accent-amber);">{{ summary.kpi.pending_queue_count }}</span>
+        <span style="font-size: 0.8rem; color: var(--text-muted);">Awaiting Assignment</span>
+    </div>
+    <div class="kpi-card">
+        <span class="kpi-title">Active in Transit</span>
+        <span class="kpi-value" style="color: var(--accent-cyan);">{{ summary.kpi.active_transit_count }}</span>
+        <span style="font-size: 0.8rem; color: var(--accent-cyan);">Live Telemetry Active</span>
+    </div>
+    <div class="kpi-card">
+        <span class="kpi-title">Ready Drivers</span>
+        <span class="kpi-value" style="color: var(--accent-emerald);">{{ summary.kpi.ready_drivers_count }}</span>
+        <span style="font-size: 0.8rem; color: var(--accent-emerald);">Available for dispatch</span>
+    </div>
+    <div class="kpi-card">
+        <span class="kpi-title">Ready Vehicles</span>
+        <span class="kpi-value">{{ summary.kpi.ready_vehicles_count }}</span>
+        <span style="font-size: 0.8rem; color: var(--text-muted);">Unassigned Fleet</span>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Driver Specific Active Delivery Banner -->
+{% if user.role.value == 'DRIVER' %}
+    {% if summary.active_delivery %}
+    <div class="card" style="margin-bottom: 2rem; border-color: var(--accent-primary); background: linear-gradient(135deg, rgba(17,24,39,0.9), rgba(99,102,241,0.1));">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <div>
+                <span class="status-pill in_progress" style="margin-bottom: 0.5rem;">ACTIVE ASSIGNMENT #{{ summary.active_delivery.id }}</span>
+                <h2 style="font-size: 1.5rem;">{{ summary.active_delivery.pickup }} &rarr; {{ summary.active_delivery.destination }}</h2>
+            </div>
+            <div style="display: flex; gap: 0.75rem; align-items: center;">
+                <a href="/vehicle-locations" class="btn btn-secondary btn-sm">📍 Live GPS Route</a>
+                {% if summary.active_delivery.status.value == 'ASSIGNED' %}
+                <button class="btn btn-primary" onclick="updateDriverDeliveryStatus({{ summary.active_delivery.id }}, 'IN_PROGRESS')">
+                    🚀 Start Transit
+                </button>
+                {% elif summary.active_delivery.status.value == 'IN_PROGRESS' %}
+                <button class="btn btn-primary" style="background: var(--accent-emerald);" onclick="updateDriverDeliveryStatus({{ summary.active_delivery.id }}, 'COMPLETED')">
+                    ✅ Complete Delivery
+                </button>
+                {% endif %}
+            </div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; font-size: 0.9rem;">
+            <div>
+                <span style="color: var(--text-secondary); display: block;">Vehicle Assigned:</span>
+                <strong>{{ summary.active_delivery.vehicle.registration_number if summary.active_delivery.vehicle else 'N/A' }}</strong>
+            </div>
+            <div>
+                <span style="color: var(--text-secondary); display: block;">Deadline:</span>
+                <strong>{{ summary.active_delivery.deadline.strftime('%Y-%m-%d %H:%M') }}</strong>
+            </div>
+            <div>
+                <span style="color: var(--text-secondary); display: block;">Notes:</span>
+                <strong>{{ summary.active_delivery.notes or 'None' }}</strong>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="card" style="margin-bottom: 2rem; text-align: center; padding: 2.5rem;">
+        <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">☕</div>
+        <h3>No Active Deliveries Assigned</h3>
+        <p style="color: var(--text-secondary); margin-top: 0.25rem;">You are marked as available for upcoming courier jobs.</p>
+        <div style="margin-top: 1rem;">
+            <a href="/vehicle-locations" class="btn btn-secondary btn-sm">📍 Inspect Live GPS & Depot Positioning</a>
+        </div>
+    </div>
+    {% endif %}
+{% endif %}
+
+<!-- Deliveries & Notifications Sections -->
+<div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem;">
+    <!-- Main Table -->
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h2>Recent Deliveries</h2>
+            <a href="/deliveries" style="font-size: 0.85rem;">View all &rarr;</a>
+        </div>
+
+        <div class="data-table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Job ID</th>
+                        <th>Route</th>
+                        <th>Status</th>
+                        <th>Vehicle</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% set jobs = summary.recent_deliveries if user.role.value == 'ADMINISTRATOR' else (summary.pending_deliveries or summary.assigned_deliveries or []) %}
+                    {% for job in jobs[:6] %}
+                    <tr>
+                        <td><strong style="font-family: var(--font-mono);">#{{ job.id }}</strong></td>
+                        <td>{{ job.pickup }} &rarr; {{ job.destination }}</td>
+                        <td>
+                            <span class="status-pill {{ job.status.value.lower() }}">{{ job.status.value }}</span>
+                        </td>
+                        <td>{{ job.vehicle.registration_number if job.vehicle else 'Unassigned' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 2rem;">No delivery jobs found.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Notifications Feed -->
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h2>Recent Alerts</h2>
+            <a href="/notifications" style="font-size: 0.85rem;">See all</a>
+        </div>
+
+        <div>
+            {% for n in notifications[:5] %}
+            <div class="notification-item {{ 'unread' if not n.read else '' }}">
+                <div>
+                    <p style="font-size: 0.875rem; margin-bottom: 0.25rem;">{{ n.message }}</p>
+                    <span class="time">{{ n.timestamp.strftime('%H:%M • %b %d') }}</span>
+                </div>
+            </div>
+            {% else %}
+            <p style="text-align: center; color: var(--text-muted); padding: 2rem 0;">No new notifications</p>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<script>
+async function updateDriverDeliveryStatus(deliveryId, status) {
+    try {
+        const res = await fetch(`/api/deliveries/${deliveryId}/status`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status })
+        });
+        if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.detail || 'Failed to update status');
+        }
+        showToast(`Delivery status updated to ${status}!`, 'success');
+        setTimeout(() => window.location.reload(), 600);
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+</script>
+{% endblock %}

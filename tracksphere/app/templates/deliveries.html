@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+
+{% block title %}TrackSphere - Delivery Management{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: flex-end;">
+    <div>
+        <h1 style="font-size: 1.85rem; margin-bottom: 0.25rem;">Delivery Operations</h1>
+        <p style="color: var(--text-secondary);">Manage courier jobs, dispatch workflows, and driver-vehicle pairings</p>
+    </div>
+    <div>
+        {% if user.role.value in ['ADMINISTRATOR', 'DISPATCHER'] %}
+        <button class="btn btn-primary" onclick="openModal('create-delivery-modal')">+ Create Delivery Job</button>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="data-table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Job ID</th>
+                    <th>Pickup Location</th>
+                    <th>Destination</th>
+                    <th>Deadline</th>
+                    <th>Status</th>
+                    <th>Driver Assigned</th>
+                    <th>Vehicle</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for d in deliveries %}
+                <tr>
+                    <td><strong style="font-family: var(--font-mono);">#{{ d.id }}</strong></td>
+                    <td>{{ d.pickup }}</td>
+                    <td>{{ d.destination }}</td>
+                    <td style="font-family: var(--font-mono); font-size: 0.8rem;">{{ d.deadline.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td>
+                        <span class="status-pill {{ d.status.value.lower() }}">{{ d.status.value }}</span>
+                    </td>
+                    <td>
+                        {% if d.driver and d.driver.user %}
+                            {{ d.driver.user.name }} ({{ d.driver.license_number }})
+                        {% else %}
+                            <span style="color: var(--text-muted);">Unassigned</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if d.vehicle %}
+                            {{ d.vehicle.registration_number }}
+                        {% else %}
+                            <span style="color: var(--text-muted);">-</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if user.role.value in ['ADMINISTRATOR', 'DISPATCHER'] and d.status.value == 'PENDING' %}
+                        <button class="btn btn-secondary btn-sm" onclick="openAssignModal({{ d.id }}, '{{ d.pickup }}', '{{ d.destination }}')">
+                            Pair & Dispatch
+                        </button>
+                        {% elif user.role.value == 'DRIVER' and d.status.value in ['ASSIGNED', 'IN_PROGRESS'] %}
+                        <button class="btn btn-primary btn-sm" onclick="quickUpdateStatus({{ d.id }}, '{{ 'IN_PROGRESS' if d.status.value == 'ASSIGNED' else 'COMPLETED' }}')">
+                            {{ 'Start Transit' if d.status.value == 'ASSIGNED' else 'Complete Job' }}
+                        </button>
+                        {% else %}
+                        <span style="color: var(--text-muted); font-size: 0.8rem;">No actions</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">No delivery jobs currently recorded.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal: Create Delivery -->
+<div id="create-delivery-modal" class="modal-backdrop">
+    <div class="modal-dialog">
+        <div class="modal-header">
+            <h3>Create New Delivery Job</h3>
+            <button class="modal-close" onclick="closeModal('create-delivery-modal')">&times;</button>
+        </div>
+        <form onsubmit="handleCreateDelivery(event)">
+            <div class="form-group">
+                <label for="new-pickup">Pickup Address / Terminal</label>
+                <input type="text" id="new-pickup" class="input-field" placeholder="e.g. 450 Logistics Blvd, Warehouse A" required>
+            </div>
+            <div class="form-group">
+                <label for="new-destination">Destination Dropoff</label>
+                <input type="text" id="new-destination" class="input-field" placeholder="e.g. 782 Commerce St, Suite 400" required>
+            </div>
+            <div class="form-group">
+                <label for="new-deadline">Delivery Deadline</label>
+                <input type="datetime-local" id="new-deadline" class="input-field" required>
+            </div>
+            <div class="form-group">
+                <label for="new-notes">Special Instructions (Optional)</label>
+                <input type="text" id="new-notes" class="input-field" placeholder="Fragile cargo, dock access code #998">
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem;">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('create-delivery-modal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Create Job</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Assign Driver & Vehicle -->
+<div id="assign-modal" class="modal-backdrop">
+    <div class="modal-dialog">
+        <div class="modal-header">
+            <h3>Dispatch & Pair Assignment</h3>
+            <button class="modal-close" onclick="closeModal('assign-modal')">&times;</button>
+        </div>
+        <p id="assign-delivery-label" style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;"></p>
+        <form onsubmit="handleConfirmAssignment(event)">
+            <input type="hidden" id="assign-delivery-id">
+            
+            <div class="form-group">
+                <label for="assign-driver-select">Select Available Driver</label>
+                <select id="assign-driver-select" class="input-field" required>
+                    <option value="">-- Choose Driver --</option>
+                    {% for drv in drivers %}
+                    <option value="{{ drv.id }}">
+                        {{ drv.user.name if drv.user else 'Driver' }} (License: {{ drv.license_number }}) - [{{ drv.availability.value }}]
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="assign-vehicle-select">Select Available Vehicle</label>
+                <select id="assign-vehicle-select" class="input-field" required>
+                    <option value="">-- Choose Vehicle --</option>
+                    {% for veh in vehicles %}
+                    <option value="{{ veh.id }}">
+                        {{ veh.registration_number }} ({{ veh.vehicle_type }}, Cap: {{ veh.capacity }}kg) - [{{ veh.status.value }}]
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="assign-strategy-select">⚡ Assignment Strategy (Strategy Pattern)</label>
+                <select id="assign-strategy-select" class="input-field">
+                    <option value="default">Standard Availability Strategy</option>
+                    <option value="high_priority">High Priority Strategy (Requires Vehicle Capacity &ge; 500kg)</option>
+                </select>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem;">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('assign-modal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Confirm Assignment</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// Set default deadline 24 hours in the future
+document.addEventListener('DOMContentLoaded', () => {
+    const d = new Date();
+    d.setHours(d.getHours() + 24);
+    const deadlineInput = document.getElementById('new-deadline');
+    if (deadlineInput) {
+        deadlineInput.value = d.toISOString().slice(0, 16);
+    }
+});
+
+async function handleCreateDelivery(e) {
+    e.preventDefault();
+    const pickup = document.getElementById('new-pickup').value;
+    const destination = document.getElementById('new-destination').value;
+    const deadline = new Date(document.getElementById('new-deadline').value).toISOString();
+    const notes = document.getElementById('new-notes').value;
+
+    try {
+        const res = await fetch('/api/deliveries', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pickup, destination, deadline, notes, priority: 2 })
+        });
+        if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.detail || 'Failed to create delivery');
+        }
+        showToast('Delivery job created!', 'success');
+        setTimeout(() => window.location.reload(), 500);
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+function openAssignModal(id, pickup, destination) {
+    document.getElementById('assign-delivery-id').value = id;
+    document.getElementById('assign-delivery-label').textContent = `Job #${id}: ${pickup} → ${destination}`;
+    openModal('assign-modal');
+}
+
+async function handleConfirmAssignment(e) {
+    e.preventDefault();
+    const deliveryId = document.getElementById('assign-delivery-id').value;
+    const driverId = parseInt(document.getElementById('assign-driver-select').value);
+    const vehicleId = parseInt(document.getElementById('assign-vehicle-select').value);
+    const strategy = document.getElementById('assign-strategy-select').value;
+
+    try {
+        const res = await fetch(`/api/deliveries/${deliveryId}/assign`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                delivery_id: parseInt(deliveryId),
+                driver_id: driverId,
+                vehicle_id: vehicleId,
+                strategy: strategy
+            })
+        });
+
+        if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.detail || 'Assignment rejected by strategy');
+        }
+
+        showToast('Assignment verified and confirmed!', 'success');
+        setTimeout(() => window.location.reload(), 500);
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+async function quickUpdateStatus(deliveryId, status) {
+    try {
+        const res = await fetch(`/api/deliveries/${deliveryId}/status`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status })
+        });
+        if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.detail || 'Status update failed');
+        }
+        showToast(`Delivery updated to ${status}!`, 'success');
+        setTimeout(() => window.location.reload(), 500);
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+</script>
+{% endblock %}

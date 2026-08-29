@@ -1,0 +1,30 @@
+# OS generated files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Temporary & Log files
+*.log
+*.tmp
+*.temp
+
+# Environment / Secret files
+.env
+.env.local
+
+# Python compiled / virtualenv files
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Databases
+*.db
+*.sqlite3

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}TrackSphere - Driver Roster{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: flex-end;">
+    <div>
+        <h1 style="font-size: 1.85rem; margin-bottom: 0.25rem;">Driver Roster</h1>
+        <p style="color: var(--text-secondary);">Driver personnel records, commercial licenses, and active shift statuses</p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="data-table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Driver ID</th>
+                    <th>Driver Name</th>
+                    <th>Email</th>
+                    <th>Commercial License #</th>
+                    <th>Availability</th>
+                    <th>Total Deliveries</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for d in drivers %}
+                <tr>
+                    <td><strong style="font-family: var(--font-mono);">#{{ d.id }}</strong></td>
+                    <td><strong style="font-size: 1rem;">🧑‍✈️ {{ d.user.name if d.user else 'Driver Profile' }}</strong></td>
+                    <td>{{ d.user.email if d.user else '-' }}</td>
+                    <td style="font-family: var(--font-mono);">{{ d.license_number }}</td>
+                    <td>
+                        <span class="status-pill {{ d.availability.value.lower() }}">{{ d.availability.value }}</span>
+                    </td>
+                    <td>{{ d.deliveries|length }} jobs</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">No drivers registered.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
